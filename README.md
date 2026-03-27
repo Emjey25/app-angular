@@ -1,10 +1,15 @@
-# 🌱 Guía Paso a Paso — Angular: Login y Dashboard
+# 🌱 Guía Paso a Paso — Angular Standalone: Login y Dashboard
 ## Aplicación "Huertas Comunitarias" — Gestión ODS 2
 
 **Duración total:** 2 horas  
 **Fecha:** 27 de Marzo, 2026  
-**Tecnologías:** Angular 17+, TypeScript, SCSS  
-**Arquitectura:** Core Architecture  
+**Tecnologías:** Angular 21 (Standalone), TypeScript, SCSS  
+**Arquitectura:** Core Architecture con Componentes Standalone  
+
+---
+
+> [!IMPORTANT]
+> **Angular 21 ya NO usa `NgModule`.** La arquitectura moderna es **100% Standalone**. Los componentes, directivas y pipes se importan directamente donde se necesiten. La configuración global se maneja mediante `app.config.ts` y funciones `provide*()`.
 
 ---
 
@@ -13,65 +18,143 @@
 | Bloque | Actividad | Duración |
 |--------|-----------|----------|
 | 1 | Crear proyecto Angular + estructura Core | 15 min |
-| 2 | Módulo Core (modelos, servicios, guards) | 20 min |
-| 3 | Módulo Auth — Login de acceso | 35 min |
-| 4 | Módulo Dashboard — Vista principal | 35 min |
+| 2 | Core: Modelos, AuthService y Guard funcional | 20 min |
+| 3 | Feature Auth — Login de acceso | 35 min |
+| 4 | Feature Dashboard — Vista principal | 35 min |
 | 5 | Routing, pruebas y ajustes finales | 15 min |
 
 ---
 
-## 🏗️ Arquitectura Core — ¿Qué es?
+## 🆚 NgModule vs Standalone — ¿Qué cambió?
+
+| Concepto (antes NgModule) | Equivalente Standalone (Angular 21) |
+|---|---|
+| `AppModule` con `@NgModule()` | `app.config.ts` con `ApplicationConfig` |
+| `imports: [BrowserModule]` en módulo | `providers: [provideRouter()]` en config |
+| `CoreModule`, `SharedModule` | Carpetas organizativas, sin archivos `.module.ts` |
+| `AuthModule` con `loadChildren` | `loadComponent` directamente en rutas |
+| `declarations: [LoginComponent]` | `imports: [ReactiveFormsModule]` dentro de cada `@Component` |
+| `app-routing.module.ts` | `app.routes.ts` (simple array de `Routes`) |
+| `@NgModule({ providers: [...] })` | `providedIn: 'root'` en servicios o `providers` en `app.config.ts` |
+
+---
+
+## 🏗️ Arquitectura Core Standalone — Estructura del Proyecto
 
 ```
 src/app/
-├── core/                    ← Servicios globales, guards, interceptors (se carga UNA vez)
+├── core/                          ← Servicios globales, guards, interceptors, modelos
 │   ├── guards/
+│   │   └── auth.guard.ts          ← Guard funcional (función, NO clase)
 │   ├── interceptors/
 │   ├── models/
+│   │   └── user.model.ts
 │   └── services/
-├── modules/                 ← Módulos de funcionalidad (lazy loading)
+│       └── auth.service.ts        ← providedIn: 'root' (singleton automático)
+├── modules/                       ← Features independientes
 │   ├── auth/
-│   │   ├── pages/
-│   │   │   └── login/
-│   │   └── auth.module.ts
+│   │   └── pages/
+│   │       └── login/             ← Componente standalone
 │   └── dashboard/
 │       ├── components/
-│       ├── pages/
-│       │   └── main/
-│       └── dashboard.module.ts
-├── shared/                  ← Componentes reutilizables, pipes, directivas
-│   ├── components/
-│   └── shared.module.ts
-├── app.component.ts
-├── app.module.ts
-└── app-routing.module.ts
+│       │   ├── sidebar/           ← Componente standalone
+│       │   ├── header/            ← Componente standalone
+│       │   └── stats-card/        ← Componente standalone
+│       └── pages/
+│           └── main/              ← Componente standalone
+├── shared/                        ← Componentes reutilizables, pipes, directivas
+│   └── components/
+├── app.ts                         ← Componente raíz standalone
+├── app.html                       ← Template del componente raíz
+├── app.scss                       ← Estilos del componente raíz
+├── app.config.ts                  ← ⭐ Reemplaza a AppModule (providers globales)
+├── app.config.server.ts           ← Configuración para SSR
+├── app.routes.ts                  ← ⭐ Reemplaza a AppRoutingModule
+└── app.routes.server.ts           ← Rutas de SSR
 ```
 
-> [!IMPORTANT]
-> **Regla de oro:** `core/` se importa SOLO en `AppModule`. `shared/` se importa donde se necesite. Los `modules/` son independientes.
+> [!NOTE]
+> **No hay ni un solo `*.module.ts`** en toda la aplicación. Los componentes se importan directamente donde se necesitan. La carpeta `core/` ya no necesita un `CoreModule` — los servicios con `providedIn: 'root'` son singleton automáticamente.
 
 ---
 
 ## BLOQUE 1 — Crear Proyecto + Estructura Core (15 min)
 
-### Paso 1.1 — Crear el proyecto Angular
+### Paso 1.1 — Crear el proyecto Angular 21
 
 Abre tu terminal y ejecuta:
 
 ```bash
-ng new huertas-comunitarias --routing --style=scss --skip-tests
+ng new huertas-comunitarias --style=scss --skip-tests --ssr
 ```
 
 > **¿Qué hace cada flag?**
-> - `--routing` → Crea el archivo de rutas automáticamente
 > - `--style=scss` → Usa SCSS en vez de CSS plano
 > - `--skip-tests` → No genera archivos `.spec.ts` (para ahorrar tiempo en clase)
+> - `--ssr` → Habilita Server-Side Rendering (incluido por defecto en Angular 21)
+>
+> ⚠️ **Ya no existe `--routing`.** Angular 21 genera `app.routes.ts` automáticamente.
+> ⚠️ **Ya no se genera `app.module.ts`.** Todo es standalone por defecto.
 
 ```bash
 cd huertas-comunitarias
 ```
 
-### Paso 1.2 — Crear la estructura de carpetas
+### Paso 1.2 — Observa los archivos generados
+
+Angular 21 genera estos archivos clave (no los archivos de NgModule del pasado):
+
+| Archivo | Propósito |
+|---------|-----------|
+| `app.ts` | Componente raíz (`@Component` standalone) |
+| `app.html` | Template del componente raíz |
+| `app.config.ts` | **Configuración global** (reemplaza `AppModule`) |
+| `app.routes.ts` | **Definición de rutas** (reemplaza `AppRoutingModule`) |
+| `app.config.server.ts` | Configuración para SSR |
+| `app.routes.server.ts` | Rutas de Server-Side Rendering |
+
+**`app.ts` — Componente Raíz (ya generado):**
+
+```typescript
+import { Component, signal } from '@angular/core';
+import { RouterOutlet } from '@angular/router';
+
+@Component({
+  selector: 'app-root',
+  imports: [RouterOutlet],      // ← Imports directamente en el componente
+  templateUrl: './app.html',
+  styleUrl: './app.scss'
+})
+export class App {
+  protected readonly title = signal('huertas-comunitarias');
+}
+```
+
+> [!NOTE]
+> Observa que **no hay `NgModule`**. El componente importa lo que necesita directamente en su decorator `@Component({ imports: [...] })`. Además, usa `signal()` en vez de propiedades simples — esto es la nueva **reactividad de Angular**.
+
+**`app.config.ts` — Configuración Global (ya generado):**
+
+```typescript
+import { ApplicationConfig, provideBrowserGlobalErrorListeners } from '@angular/core';
+import { provideRouter } from '@angular/router';
+
+import { routes } from './app.routes';
+import { provideClientHydration, withEventReplay } from '@angular/platform-browser';
+
+export const appConfig: ApplicationConfig = {
+  providers: [
+    provideBrowserGlobalErrorListeners(),
+    provideRouter(routes),
+    provideClientHydration(withEventReplay())
+  ]
+};
+```
+
+> [!IMPORTANT]
+> `app.config.ts` es el **corazón de la configuración**. Aquí se registran todos los providers globales: Router, HttpClient, Hydration, etc. Es el reemplazo directo de `AppModule`.
+
+### Paso 1.3 — Crear la estructura de carpetas
 
 Ejecuta estos comandos **en orden**:
 
@@ -82,7 +165,7 @@ mkdir -p src/app/core/interceptors
 mkdir -p src/app/core/models
 mkdir -p src/app/core/services
 
-# 2. Carpetas de Módulos
+# 2. Carpetas de Features (antes llamados "Módulos")
 mkdir -p src/app/modules/auth/pages/login
 mkdir -p src/app/modules/dashboard/components
 mkdir -p src/app/modules/dashboard/pages/main
@@ -91,62 +174,22 @@ mkdir -p src/app/modules/dashboard/pages/main
 mkdir -p src/app/shared/components
 ```
 
-### Paso 1.3 — Generar el CoreModule
+### Paso 1.4 — ¿Y el CoreModule? ¡Ya no lo necesitas!
 
-```bash
-ng generate module core
-```
+En la guía anterior con NgModule, creábamos un `CoreModule` con el patrón `@Optional() @SkipSelf()` para evitar múltiples instancias. **En standalone, esto ya no es necesario:**
 
-Abre `src/app/core/core.module.ts` y reemplaza con:
+| Antes (NgModule) | Ahora (Standalone) |
+|---|----|
+| `CoreModule` con `@Optional() @SkipSelf()` | No necesario — `providedIn: 'root'` garantiza singleton |
+| Importar `CoreModule` en `AppModule` | No necesario — servicios se inyectan directamente |
+| `SharedModule` exportando componentes | No necesario — cada componente importa lo que necesita |
 
-```typescript
-import { NgModule, Optional, SkipSelf } from '@angular/core';
-import { CommonModule } from '@angular/common';
-
-@NgModule({
-  declarations: [],
-  imports: [CommonModule],
-})
-export class CoreModule {
-  // Este constructor IMPIDE que CoreModule se importe más de una vez
-  constructor(@Optional() @SkipSelf() parentModule: CoreModule) {
-    if (parentModule) {
-      throw new Error('CoreModule ya está cargado. Importalo SOLO en AppModule.');
-    }
-  }
-}
-```
-
-> [!NOTE]
-> El patrón `@Optional() @SkipSelf()` es una buena práctica. Si alguien intenta importar CoreModule en otro módulo que no sea AppModule, Angular lanzará un error claro.
-
-### Paso 1.4 — Importar CoreModule en AppModule
-
-Abre `src/app/app.module.ts`:
-
-```typescript
-import { NgModule } from '@angular/core';
-import { BrowserModule } from '@angular/platform-browser';
-import { AppRoutingModule } from './app-routing.module';
-import { AppComponent } from './app.component';
-import { CoreModule } from './core/core.module';
-
-@NgModule({
-  declarations: [AppComponent],
-  imports: [
-    BrowserModule,
-    AppRoutingModule,
-    CoreModule      // ← SOLO aquí
-  ],
-  providers: [],
-  bootstrap: [AppComponent]
-})
-export class AppModule { }
-```
+> [!TIP]
+> La carpeta `core/` sigue existiendo como **organización lógica** de tu código, pero ya no contiene un archivo `.module.ts`. Los servicios con `providedIn: 'root'` son singleton automáticamente en toda la aplicación.
 
 ---
 
-## BLOQUE 2 — Módulo Core: Modelos, Servicio y Guard (20 min)
+## BLOQUE 2 — Core: Modelos, Servicio y Guard Funcional (20 min)
 
 ### Paso 2.1 — Crear el modelo de Usuario
 
@@ -181,20 +224,25 @@ ng generate service core/services/auth --skip-tests
 Abre `src/app/core/services/auth.service.ts` y reemplaza con:
 
 ```typescript
-import { Injectable } from '@angular/core';
+import { Injectable, signal, computed } from '@angular/core';
 import { Router } from '@angular/router';
-import { BehaviorSubject, Observable, of } from 'rxjs';
+import { Observable, of } from 'rxjs';
 import { delay, tap } from 'rxjs/operators';
 import { User, LoginRequest, LoginResponse } from '../models/user.model';
 
 @Injectable({
-  providedIn: 'root'
+  providedIn: 'root'   // ← Singleton automático, NO necesita CoreModule
 })
 export class AuthService {
 
-  // BehaviorSubject guarda el último valor emitido
-  private currentUserSubject = new BehaviorSubject<User | null>(null);
-  public currentUser$ = this.currentUserSubject.asObservable();
+  // ✅ Angular 21: Usamos Signals en vez de BehaviorSubject
+  private currentUserSignal = signal<User | null>(null);
+
+  // Signal de solo lectura para exponer al exterior
+  public readonly currentUser = this.currentUserSignal.asReadonly();
+
+  // Signal computado: deriva automáticamente si está autenticado
+  public readonly isLoggedIn = computed(() => this.currentUser() !== null);
 
   // Token almacenado en localStorage
   private readonly TOKEN_KEY = 'huertas_token';
@@ -209,7 +257,6 @@ export class AuthService {
    * En producción, aquí iría un HttpClient.post()
    */
   login(credentials: LoginRequest): Observable<LoginResponse> {
-    // Simulación: usuario válido
     const mockResponse: LoginResponse = {
       token: 'jwt-token-simulado-' + Date.now(),
       user: {
@@ -226,7 +273,7 @@ export class AuthService {
       delay(1000),
       tap(response => {
         localStorage.setItem(this.TOKEN_KEY, response.token);
-        this.currentUserSubject.next(response.user);
+        this.currentUserSignal.set(response.user); // ← .set() en vez de .next()
       })
     );
   }
@@ -236,7 +283,7 @@ export class AuthService {
    */
   logout(): void {
     localStorage.removeItem(this.TOKEN_KEY);
-    this.currentUserSubject.next(null);
+    this.currentUserSignal.set(null);
     this.router.navigate(['/auth/login']);
   }
 
@@ -248,20 +295,12 @@ export class AuthService {
   }
 
   /**
-   * Obtiene el usuario actual
-   */
-  getCurrentUser(): User | null {
-    return this.currentUserSubject.value;
-  }
-
-  /**
    * Revisa si hay token al iniciar la app
    */
   private checkStoredToken(): void {
     const token = localStorage.getItem(this.TOKEN_KEY);
     if (token) {
-      // En producción: validar token con el backend
-      this.currentUserSubject.next({
+      this.currentUserSignal.set({
         id: 1,
         nombre: 'Mónica',
         email: 'monica@huertas.com',
@@ -273,129 +312,89 @@ export class AuthService {
 ```
 
 > [!TIP]
-> `BehaviorSubject` es mejor que `Subject` aquí porque siempre mantiene el último valor. Así, cuando un componente se suscribe tarde, igual recibe el estado actual del usuario.
+> **¿Por qué Signals en vez de BehaviorSubject?**
+> - `signal()` es nativo de Angular, no requiere RxJS.
+> - `computed()` auto-deriva valores — como `isLoggedIn` que se actualiza solo cuando cambia `currentUser`.
+> - No necesitas `.subscribe()` en los templates — solo llamas `currentUser()` como una función.
+> - Mejor rendimiento: Angular sabe exactamente qué componentes re-renderizar.
 
-### Paso 2.3 — Crear el AuthGuard
+### Paso 2.3 — Crear el AuthGuard (Guard Funcional)
 
 ```bash
 ng generate guard core/guards/auth --skip-tests
 ```
 
-Cuando Angular pregunte qué interfaz, selecciona **CanActivate**.
+> [!WARNING]
+> **Angular 21 NO usa guards basados en clases** (`implements CanActivate`). Ahora los guards son **funciones simples**, más ligeras y fáciles de testear.
 
 Abre `src/app/core/guards/auth.guard.ts` y reemplaza con:
 
 ```typescript
-import { Injectable } from '@angular/core';
-import { CanActivate, Router, UrlTree } from '@angular/router';
+import { inject } from '@angular/core';
+import { CanActivateFn, Router } from '@angular/router';
 import { AuthService } from '../services/auth.service';
 
-@Injectable({
-  providedIn: 'root'
-})
-export class AuthGuard implements CanActivate {
+/**
+ * Guard funcional — Angular 21 estándar.
+ * Ya no es una clase con @Injectable, es una simple función.
+ */
+export const authGuard: CanActivateFn = (route, state) => {
+  const authService = inject(AuthService);  // ← inject() en vez de constructor
+  const router = inject(Router);
 
-  constructor(
-    private authService: AuthService,
-    private router: Router
-  ) {}
-
-  canActivate(): boolean | UrlTree {
-    if (this.authService.isAuthenticated()) {
-      return true; // ✅ Puede pasar
-    }
-    // ❌ No autenticado → redirige al login
-    return this.router.createUrlTree(['/auth/login']);
+  if (authService.isAuthenticated()) {
+    return true; // ✅ Puede pasar
   }
-}
+
+  // ❌ No autenticado → redirige al login
+  return router.createUrlTree(['/auth/login']);
+};
 ```
+
+**Diferencias clave con el guard anterior:**
+
+| Antes (Clase) | Ahora (Función) |
+|---|---|
+| `@Injectable({ providedIn: 'root' })` | No necesita decorator |
+| `class AuthGuard implements CanActivate` | `const authGuard: CanActivateFn = ...` |
+| `constructor(private authService: AuthService)` | `const authService = inject(AuthService)` |
+| `canActivate(): boolean` | Arrow function directa |
 
 ---
 
-## BLOQUE 3 — Módulo Auth: Pantalla de Login (35 min)
+## BLOQUE 3 — Feature Auth: Pantalla de Login (35 min)
 
-### Paso 3.1 — Generar el módulo Auth con routing
-
-```bash
-ng generate module modules/auth --routing
-```
-
-### Paso 3.2 — Generar el componente Login
+### Paso 3.1 — Generar el componente Login (Standalone)
 
 ```bash
 ng generate component modules/auth/pages/login --skip-tests
 ```
 
-### Paso 3.3 — Configurar las rutas del AuthModule
+> [!NOTE]
+> En Angular 21, `ng generate component` crea componentes **standalone por defecto**. No necesitas agregar `--standalone` ni crear un módulo separado.
+> ⚠️ **Ya no ejecutamos `ng generate module modules/auth`.** No necesitamos `AuthModule`.
 
-Abre `src/app/modules/auth/auth-routing.module.ts`:
+### Paso 3.2 — Crear el componente Login (TypeScript)
 
-```typescript
-import { NgModule } from '@angular/core';
-import { RouterModule, Routes } from '@angular/router';
-import { LoginComponent } from './pages/login/login.component';
-
-const routes: Routes = [
-  {
-    path: 'login',
-    component: LoginComponent
-  },
-  {
-    path: '',
-    redirectTo: 'login',
-    pathMatch: 'full'
-  }
-];
-
-@NgModule({
-  imports: [RouterModule.forChild(routes)],
-  exports: [RouterModule]
-})
-export class AuthRoutingModule { }
-```
-
-### Paso 3.4 — Configurar el AuthModule
-
-Abre `src/app/modules/auth/auth.module.ts`:
+Abre `src/app/modules/auth/pages/login/login.ts`:
 
 ```typescript
-import { NgModule } from '@angular/core';
-import { CommonModule } from '@angular/common';
-import { ReactiveFormsModule } from '@angular/forms';
-import { AuthRoutingModule } from './auth-routing.module';
-import { LoginComponent } from './pages/login/login.component';
-
-@NgModule({
-  declarations: [LoginComponent],
-  imports: [
-    CommonModule,
-    ReactiveFormsModule,  // ← Para formularios reactivos
-    AuthRoutingModule
-  ]
-})
-export class AuthModule { }
-```
-
-### Paso 3.5 — Crear el componente Login (TypeScript)
-
-Abre `src/app/modules/auth/pages/login/login.component.ts`:
-
-```typescript
-import { Component, OnInit } from '@angular/core';
-import { FormBuilder, FormGroup, Validators } from '@angular/forms';
+import { Component, OnInit, signal } from '@angular/core';
+import { FormBuilder, FormGroup, Validators, ReactiveFormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { AuthService } from '../../../../core/services/auth.service';
 
 @Component({
   selector: 'app-login',
-  templateUrl: './login.component.html',
-  styleUrls: ['./login.component.scss']
+  imports: [ReactiveFormsModule],  // ← Se importa AQUÍ, no en un módulo
+  templateUrl: './login.html',
+  styleUrl: './login.scss'
 })
-export class LoginComponent implements OnInit {
+export class Login implements OnInit {
 
   loginForm!: FormGroup;
-  isLoading = false;
-  errorMessage = '';
+  isLoading = signal(false);        // ← signal en vez de propiedad simple
+  errorMessage = signal('');
 
   constructor(
     private fb: FormBuilder,
@@ -422,34 +421,40 @@ export class LoginComponent implements OnInit {
   }
 
   onSubmit(): void {
-    // Si el form es inválido, marcar todos los campos como tocados
     if (this.loginForm.invalid) {
       this.loginForm.markAllAsTouched();
       return;
     }
 
-    this.isLoading = true;
-    this.errorMessage = '';
+    this.isLoading.set(true);
+    this.errorMessage.set('');
 
     this.authService.login(this.loginForm.value).subscribe({
       next: () => {
         this.router.navigate(['/dashboard']);
       },
       error: (err) => {
-        this.errorMessage = 'Credenciales incorrectas. Intenta de nuevo.';
-        this.isLoading = false;
+        this.errorMessage.set('Credenciales incorrectas. Intenta de nuevo.');
+        this.isLoading.set(false);
       },
       complete: () => {
-        this.isLoading = false;
+        this.isLoading.set(false);
       }
     });
   }
 }
 ```
 
-### Paso 3.6 — Crear el HTML del Login
+> [!NOTE]
+> **Diferencias clave respecto a NgModule:**
+> - `ReactiveFormsModule` se importa directamente en `@Component({ imports: [...] })`, no en un módulo padre.
+> - El nombre del componente es `Login`, no `LoginComponent` (convención Angular 21).
+> - El archivo se llama `login.ts`, no `login.component.ts` (convención Angular 21).
+> - `isLoading` y `errorMessage` usan `signal()` para reactividad granular.
 
-Abre `src/app/modules/auth/pages/login/login.component.html`:
+### Paso 3.3 — Crear el HTML del Login
+
+Abre `src/app/modules/auth/pages/login/login.html`:
 
 ```html
 <div class="login-container">
@@ -475,12 +480,13 @@ Abre `src/app/modules/auth/pages/login/login.component.html`:
           placeholder="correo@ejemplo.com"
           [class.input-error]="f['email'].touched && f['email'].invalid"
         />
-        <span class="error-text" *ngIf="f['email'].touched && f['email'].errors?.['required']">
-          El correo es obligatorio
-        </span>
-        <span class="error-text" *ngIf="f['email'].touched && f['email'].errors?.['email']">
-          Ingresa un correo válido
-        </span>
+        <!-- ✅ Angular 21: @if en vez de *ngIf -->
+        @if (f['email'].touched && f['email'].errors?.['required']) {
+          <span class="error-text">El correo es obligatorio</span>
+        }
+        @if (f['email'].touched && f['email'].errors?.['email']) {
+          <span class="error-text">Ingresa un correo válido</span>
+        }
       </div>
 
       <!-- Campo Password -->
@@ -493,27 +499,32 @@ Abre `src/app/modules/auth/pages/login/login.component.html`:
           placeholder="Mínimo 6 caracteres"
           [class.input-error]="f['password'].touched && f['password'].invalid"
         />
-        <span class="error-text" *ngIf="f['password'].touched && f['password'].errors?.['required']">
-          La contraseña es obligatoria
-        </span>
-        <span class="error-text" *ngIf="f['password'].touched && f['password'].errors?.['minlength']">
-          Mínimo 6 caracteres
-        </span>
+        @if (f['password'].touched && f['password'].errors?.['required']) {
+          <span class="error-text">La contraseña es obligatoria</span>
+        }
+        @if (f['password'].touched && f['password'].errors?.['minlength']) {
+          <span class="error-text">Mínimo 6 caracteres</span>
+        }
       </div>
 
       <!-- Mensaje de error general -->
-      <div class="error-banner" *ngIf="errorMessage">
-        ⚠️ {{ errorMessage }}
-      </div>
+      @if (errorMessage()) {
+        <div class="error-banner">
+          ⚠️ {{ errorMessage() }}
+        </div>
+      }
 
       <!-- Botón Submit -->
       <button
         type="submit"
         class="btn-login"
-        [disabled]="isLoading"
+        [disabled]="isLoading()"
       >
-        <span *ngIf="!isLoading">Iniciar Sesión</span>
-        <span *ngIf="isLoading">Cargando...</span>
+        @if (!isLoading()) {
+          <span>Iniciar Sesión</span>
+        } @else {
+          <span>Cargando...</span>
+        }
       </button>
 
     </form>
@@ -521,9 +532,16 @@ Abre `src/app/modules/auth/pages/login/login.component.html`:
 </div>
 ```
 
-### Paso 3.7 — Crear los estilos del Login (SCSS)
+> [!IMPORTANT]
+> **Angular 21 usa `@if` / `@else` / `@for` en vez de `*ngIf` / `*ngFor`.**
+> - Antes: `<span *ngIf="errorMessage">{{ errorMessage }}</span>`
+> - Ahora: `@if (errorMessage()) { <span>{{ errorMessage() }}</span> }`
+>
+> Los signals se llaman como funciones: `errorMessage()` en vez de `errorMessage`.
 
-Abre `src/app/modules/auth/pages/login/login.component.scss`:
+### Paso 3.4 — Crear los estilos del Login (SCSS)
+
+Abre `src/app/modules/auth/pages/login/login.scss`:
 
 ```scss
 .login-container {
@@ -639,7 +657,7 @@ Abre `src/app/modules/auth/pages/login/login.component.scss`:
 }
 ```
 
-### Paso 3.8 — Estilos globales
+### Paso 3.5 — Estilos globales
 
 Abre `src/styles.scss` y agrega:
 
@@ -661,15 +679,9 @@ body {
 
 ---
 
-## BLOQUE 4 — Módulo Dashboard: Vista Principal (35 min)
+## BLOQUE 4 — Feature Dashboard: Vista Principal (35 min)
 
-### Paso 4.1 — Generar el módulo Dashboard con routing
-
-```bash
-ng generate module modules/dashboard --routing
-```
-
-### Paso 4.2 — Generar los componentes necesarios
+### Paso 4.1 — Generar los componentes standalone
 
 ```bash
 # Página principal del dashboard
@@ -681,72 +693,25 @@ ng generate component modules/dashboard/components/header --skip-tests
 ng generate component modules/dashboard/components/stats-card --skip-tests
 ```
 
-### Paso 4.3 — Configurar rutas del Dashboard
+> [!NOTE]
+> **Ya no ejecutamos `ng generate module modules/dashboard`.** Cada componente es standalone e importa lo que necesita directamente. No necesitamos `DashboardModule` ni `DashboardRoutingModule`.
 
-Abre `src/app/modules/dashboard/dashboard-routing.module.ts`:
+### Paso 4.2 — Componente Sidebar
 
-```typescript
-import { NgModule } from '@angular/core';
-import { RouterModule, Routes } from '@angular/router';
-import { MainComponent } from './pages/main/main.component';
-
-const routes: Routes = [
-  {
-    path: '',
-    component: MainComponent
-  }
-];
-
-@NgModule({
-  imports: [RouterModule.forChild(routes)],
-  exports: [RouterModule]
-})
-export class DashboardRoutingModule { }
-```
-
-### Paso 4.4 — Configurar DashboardModule
-
-Abre `src/app/modules/dashboard/dashboard.module.ts`:
+**`sidebar.ts`:**
 
 ```typescript
-import { NgModule } from '@angular/core';
-import { CommonModule } from '@angular/common';
-import { DashboardRoutingModule } from './dashboard-routing.module';
-import { MainComponent } from './pages/main/main.component';
-import { SidebarComponent } from './components/sidebar/sidebar.component';
-import { HeaderComponent } from './components/header/header.component';
-import { StatsCardComponent } from './components/stats-card/stats-card.component';
-
-@NgModule({
-  declarations: [
-    MainComponent,
-    SidebarComponent,
-    HeaderComponent,
-    StatsCardComponent
-  ],
-  imports: [
-    CommonModule,
-    DashboardRoutingModule
-  ]
-})
-export class DashboardModule { }
-```
-
-### Paso 4.5 — Componente Sidebar
-
-**`sidebar.component.ts`:**
-
-```typescript
-import { Component, Output, EventEmitter } from '@angular/core';
+import { Component, output } from '@angular/core';
 
 @Component({
   selector: 'app-sidebar',
-  templateUrl: './sidebar.component.html',
-  styleUrls: ['./sidebar.component.scss']
+  templateUrl: './sidebar.html',
+  styleUrl: './sidebar.scss'
 })
-export class SidebarComponent {
+export class Sidebar {
 
-  @Output() menuSelected = new EventEmitter<string>();
+  // ✅ Angular 21: output() en vez de @Output() + EventEmitter
+  menuSelected = output<string>();
 
   menuItems = [
     { icon: '📊', label: 'Dashboard', route: 'dashboard' },
@@ -767,7 +732,7 @@ export class SidebarComponent {
 }
 ```
 
-**`sidebar.component.html`:**
+**`sidebar.html`:**
 
 ```html
 <aside class="sidebar">
@@ -777,20 +742,25 @@ export class SidebarComponent {
   </div>
 
   <nav class="sidebar-nav">
-    <a
-      *ngFor="let item of menuItems"
-      class="nav-item"
-      [class.active]="activeItem === item.route"
-      (click)="selectItem(item.route)"
-    >
-      <span class="nav-icon">{{ item.icon }}</span>
-      <span class="nav-label">{{ item.label }}</span>
-    </a>
+    <!-- ✅ @for en vez de *ngFor -->
+    @for (item of menuItems; track item.route) {
+      <a
+        class="nav-item"
+        [class.active]="activeItem === item.route"
+        (click)="selectItem(item.route)"
+      >
+        <span class="nav-icon">{{ item.icon }}</span>
+        <span class="nav-label">{{ item.label }}</span>
+      </a>
+    }
   </nav>
 </aside>
 ```
 
-**`sidebar.component.scss`:**
+> [!TIP]
+> **`@for` requiere `track`** — es obligatorio. Esto reemplaza `trackBy` de `*ngFor` y ayuda a Angular a optimizar el rendering. Usamos `track item.route` porque es un identificador único para cada elemento del menú.
+
+**`sidebar.scss`:**
 
 ```scss
 .sidebar {
@@ -847,31 +817,26 @@ export class SidebarComponent {
 }
 ```
 
-### Paso 4.6 — Componente Header
+### Paso 4.3 — Componente Header
 
-**`header.component.ts`:**
+**`header.ts`:**
 
 ```typescript
-import { Component, OnInit } from '@angular/core';
+import { Component, inject } from '@angular/core';
 import { AuthService } from '../../../../core/services/auth.service';
-import { User } from '../../../../core/models/user.model';
 
 @Component({
   selector: 'app-header',
-  templateUrl: './header.component.html',
-  styleUrls: ['./header.component.scss']
+  templateUrl: './header.html',
+  styleUrl: './header.scss'
 })
-export class HeaderComponent implements OnInit {
+export class Header {
 
-  user: User | null = null;
+  // ✅ Angular 21: inject() en vez de inyección por constructor
+  private authService = inject(AuthService);
 
-  constructor(private authService: AuthService) {}
-
-  ngOnInit(): void {
-    this.authService.currentUser$.subscribe(user => {
-      this.user = user;
-    });
-  }
+  // ✅ Accedemos al signal directamente, no necesitamos subscribe
+  user = this.authService.currentUser;
 
   logout(): void {
     this.authService.logout();
@@ -879,7 +844,12 @@ export class HeaderComponent implements OnInit {
 }
 ```
 
-**`header.component.html`:**
+> [!NOTE]
+> **Observa lo simplificado que es con Signals:**
+> - No hay `ngOnInit`, ni `subscribe()`, ni `OnDestroy` para limpiar suscripciones.
+> - `this.authService.currentUser` es un signal — el template lo llama como `user()` y se actualiza automáticamente.
+
+**`header.html`:**
 
 ```html
 <header class="header">
@@ -887,19 +857,21 @@ export class HeaderComponent implements OnInit {
 
   <div class="header-actions">
     <button class="btn-icon" title="Notificaciones">🔔</button>
-    <div class="user-info" *ngIf="user">
-      <div class="user-avatar">{{ user.nombre.charAt(0) }}</div>
-      <div class="user-details">
-        <span class="user-name">{{ user.nombre }}</span>
-        <span class="user-role">{{ user.rol }}</span>
+    @if (user()) {
+      <div class="user-info">
+        <div class="user-avatar">{{ user()!.nombre.charAt(0) }}</div>
+        <div class="user-details">
+          <span class="user-name">{{ user()!.nombre }}</span>
+          <span class="user-role">{{ user()!.rol }}</span>
+        </div>
+        <button class="btn-logout" (click)="logout()" title="Cerrar sesión">🚪</button>
       </div>
-      <button class="btn-logout" (click)="logout()" title="Cerrar sesión">🚪</button>
-    </div>
+    }
   </div>
 </header>
 ```
 
-**`header.component.scss`:**
+**`header.scss`:**
 
 ```scss
 .header {
@@ -975,38 +947,42 @@ export class HeaderComponent implements OnInit {
 }
 ```
 
-### Paso 4.7 — Componente StatsCard (reutilizable)
+### Paso 4.4 — Componente StatsCard (reutilizable)
 
-**`stats-card.component.ts`:**
+**`stats-card.ts`:**
 
 ```typescript
-import { Component, Input } from '@angular/core';
+import { Component, input } from '@angular/core';
 
 @Component({
   selector: 'app-stats-card',
-  templateUrl: './stats-card.component.html',
-  styleUrls: ['./stats-card.component.scss']
+  templateUrl: './stats-card.html',
+  styleUrl: './stats-card.scss'
 })
-export class StatsCardComponent {
-  @Input() title = '';
-  @Input() value: string | number = 0;
-  @Input() icon = '';
+export class StatsCard {
+  // ✅ Angular 21: input() en vez de @Input()
+  title = input('');
+  value = input<string | number>(0);
+  icon = input('');
 }
 ```
 
-**`stats-card.component.html`:**
+> [!NOTE]
+> **`input()` reemplaza a `@Input()`** — Es type-safe, inmutable por defecto, y se integra con el sistema de Signals. En el template accedes con `title()`, `value()`, `icon()`.
+
+**`stats-card.html`:**
 
 ```html
 <div class="stats-card">
-  <div class="stats-icon">{{ icon }}</div>
+  <div class="stats-icon">{{ icon() }}</div>
   <div class="stats-info">
-    <span class="stats-label">{{ title }}</span>
-    <span class="stats-value">{{ value }}</span>
+    <span class="stats-label">{{ title() }}</span>
+    <span class="stats-value">{{ value() }}</span>
   </div>
 </div>
 ```
 
-**`stats-card.component.scss`:**
+**`stats-card.scss`:**
 
 ```scss
 .stats-card {
@@ -1053,19 +1029,24 @@ export class StatsCardComponent {
 }
 ```
 
-### Paso 4.8 — Página Principal del Dashboard
+### Paso 4.5 — Página Principal del Dashboard
 
-**`main.component.ts`:**
+**`main.ts`:**
 
 ```typescript
 import { Component } from '@angular/core';
+import { Sidebar } from '../../components/sidebar/sidebar';
+import { Header } from '../../components/header/header';
+import { StatsCard } from '../../components/stats-card/stats-card';
 
 @Component({
   selector: 'app-main',
-  templateUrl: './main.component.html',
-  styleUrls: ['./main.component.scss']
+  // ✅ Standalone: importamos los componentes que usamos directamente aquí
+  imports: [Sidebar, Header, StatsCard],
+  templateUrl: './main.html',
+  styleUrl: './main.scss'
 })
-export class MainComponent {
+export class Main {
 
   stats = [
     { title: 'Total Huertas Activas', value: 5, icon: '🌿' },
@@ -1086,17 +1067,20 @@ export class MainComponent {
 }
 ```
 
-**`main.component.html`:**
+> [!IMPORTANT]
+> **Esto es la clave de Standalone:** El componente `Main` importa `Sidebar`, `Header` y `StatsCard` directamente en su decorator. No hay un módulo intermediario. Cada componente declara exactamente lo que necesita.
+
+**`main.html`:**
 
 ```html
 <div class="dashboard-layout">
   <!-- Sidebar -->
-  <app-sidebar></app-sidebar>
+  <app-sidebar />
 
   <!-- Contenido principal -->
   <div class="dashboard-content">
     <!-- Header -->
-    <app-header></app-header>
+    <app-header />
 
     <!-- Cuerpo del dashboard -->
     <main class="dashboard-body">
@@ -1104,12 +1088,13 @@ export class MainComponent {
       <!-- Resumen Mensual -->
       <section class="section-title">Resumen Mensual</section>
       <div class="stats-grid">
-        <app-stats-card
-          *ngFor="let stat of stats"
-          [title]="stat.title"
-          [value]="stat.value"
-          [icon]="stat.icon"
-        ></app-stats-card>
+        @for (stat of stats; track stat.title) {
+          <app-stats-card
+            [title]="stat.title"
+            [value]="stat.value"
+            [icon]="stat.icon"
+          />
+        }
       </div>
 
       <!-- Grid de widgets -->
@@ -1128,16 +1113,18 @@ export class MainComponent {
               </tr>
             </thead>
             <tbody>
-              <tr *ngFor="let t of tareas">
-                <td>{{ t.tarea }}</td>
-                <td>{{ t.asignado }}</td>
-                <td>{{ t.fecha }}</td>
-                <td>
-                  <span class="badge" [class]="'badge-' + t.estado.toLowerCase().replace(' ', '-')">
-                    {{ t.estado }}
-                  </span>
-                </td>
-              </tr>
+              @for (t of tareas; track t.tarea) {
+                <tr>
+                  <td>{{ t.tarea }}</td>
+                  <td>{{ t.asignado }}</td>
+                  <td>{{ t.fecha }}</td>
+                  <td>
+                    <span class="badge" [class]="'badge-' + t.estado.toLowerCase().replace(' ', '-')">
+                      {{ t.estado }}
+                    </span>
+                  </td>
+                </tr>
+              }
             </tbody>
           </table>
         </div>
@@ -1146,15 +1133,17 @@ export class MainComponent {
         <div class="widget-card">
           <h3>Estado de Cultivos</h3>
           <div class="cultivo-list">
-            <div class="cultivo-item" *ngFor="let c of cultivos">
-              <div class="cultivo-info">
-                <strong>{{ c.nombre }}</strong>
-                <small>Estado: {{ c.estado }}</small>
+            @for (c of cultivos; track c.nombre) {
+              <div class="cultivo-item">
+                <div class="cultivo-info">
+                  <strong>{{ c.nombre }}</strong>
+                  <small>Estado: {{ c.estado }}</small>
+                </div>
+                <span class="badge" [style.background]="c.color" style="color: white">
+                  {{ c.estado }}
+                </span>
               </div>
-              <span class="badge" [style.background]="c.color" style="color: white">
-                {{ c.estado }}
-              </span>
-            </div>
+            }
           </div>
         </div>
 
@@ -1164,7 +1153,10 @@ export class MainComponent {
 </div>
 ```
 
-**`main.component.scss`:**
+> [!TIP]
+> **Observa la sintaxis de los tags:** `<app-sidebar />` — Angular 21 soporta **self-closing tags** para componentes sin contenido hijo. Es más limpio que `<app-sidebar></app-sidebar>`.
+
+**`main.scss`:**
 
 ```scss
 .dashboard-layout {
@@ -1289,57 +1281,79 @@ export class MainComponent {
 
 ## BLOQUE 5 — Routing Principal y Pruebas (15 min)
 
-### Paso 5.1 — Configurar el Routing Principal con Lazy Loading
+### Paso 5.1 — Configurar las rutas con Lazy Loading (por componente)
 
-Abre `src/app/app-routing.module.ts`:
+Abre `src/app/app.routes.ts`:
 
 ```typescript
-import { NgModule } from '@angular/core';
-import { RouterModule, Routes } from '@angular/router';
-import { AuthGuard } from './core/guards/auth.guard';
+import { Routes } from '@angular/router';
+import { authGuard } from './core/guards/auth.guard';
 
-const routes: Routes = [
+export const routes: Routes = [
   {
-    path: 'auth',
-    loadChildren: () =>
-      import('./modules/auth/auth.module').then(m => m.AuthModule)
+    path: 'auth/login',
+    // ✅ loadComponent en vez de loadChildren + módulo
+    loadComponent: () =>
+      import('./modules/auth/pages/login/login').then(c => c.Login)
   },
   {
     path: 'dashboard',
-    loadChildren: () =>
-      import('./modules/dashboard/dashboard.module').then(m => m.DashboardModule),
-    canActivate: [AuthGuard]  // ← Protegido por el guard
+    loadComponent: () =>
+      import('./modules/dashboard/pages/main/main').then(c => c.Main),
+    canActivate: [authGuard]  // ← Guard funcional (minúscula, es una función)
   },
   {
     path: '',
-    redirectTo: 'auth',
+    redirectTo: 'auth/login',
     pathMatch: 'full'
   },
   {
     path: '**',
-    redirectTo: 'auth'  // ← Cualquier ruta no encontrada → login
+    redirectTo: 'auth/login'
   }
 ];
-
-@NgModule({
-  imports: [RouterModule.forRoot(routes)],
-  exports: [RouterModule]
-})
-export class AppRoutingModule { }
 ```
 
 > [!IMPORTANT]
-> **Lazy Loading** significa que Angular NO carga el módulo de Dashboard hasta que el usuario navegue a `/dashboard`. Esto mejora el rendimiento inicial de la app.
+> **`loadComponent` reemplaza a `loadChildren`.**
+> - Antes: `loadChildren: () => import('./modules/auth/auth.module').then(m => m.AuthModule)`
+> - Ahora: `loadComponent: () => import('./modules/auth/pages/login/login').then(c => c.Login)`
+>
+> **Ya no hay módulos intermediarios.** Cada componente se carga directamente con lazy loading.
 
-### Paso 5.2 — Limpiar el AppComponent
+**Diferencias clave en el routing:**
 
-Abre `src/app/app.component.html` y reemplaza TODO el contenido con:
+| Antes (NgModule) | Ahora (Standalone) |
+|---|---|
+| `app-routing.module.ts` con `@NgModule` | `app.routes.ts` — simple array exportado |
+| `RouterModule.forRoot(routes)` | `provideRouter(routes)` en `app.config.ts` |
+| `loadChildren` → carga un módulo completo | `loadComponent` → carga un componente directamente |
+| `canActivate: [AuthGuard]` (clase) | `canActivate: [authGuard]` (función) |
 
-```html
-<router-outlet></router-outlet>
+### Paso 5.2 — Configurar SSR (rutas del servidor)
+
+Abre `src/app/app.routes.server.ts` y asegúrate de que tenga:
+
+```typescript
+import { RenderMode, ServerRoute } from '@angular/ssr';
+
+export const serverRoutes: ServerRoute[] = [
+  {
+    path: '**',
+    renderMode: RenderMode.Prerender
+  }
+];
 ```
 
-### Paso 5.3 — Levantar la aplicación
+### Paso 5.3 — Limpiar el template del componente raíz
+
+Abre `src/app/app.html` y reemplaza TODO el contenido con:
+
+```html
+<router-outlet />
+```
+
+### Paso 5.4 — Levantar la aplicación
 
 ```bash
 ng serve
@@ -1347,12 +1361,12 @@ ng serve
 
 Abre el navegador en `http://localhost:4200`
 
-### Paso 5.4 — Verificar el flujo completo
+### Paso 5.5 — Verificar el flujo completo
 
 | # | Prueba | Resultado Esperado |
 |---|--------|--------------------|
 | 1 | Ir a `localhost:4200` | Redirige a `/auth/login` |
-| 2 | Ir a `localhost:4200/dashboard` sin login | Redirige a `/auth/login` (AuthGuard bloquea) |
+| 2 | Ir a `localhost:4200/dashboard` sin login | Redirige a `/auth/login` (authGuard bloquea) |
 | 3 | Ingresar email y password válidos | Botón muestra "Cargando...", luego redirige a `/dashboard` |
 | 4 | Ver el Dashboard | Se muestra sidebar, header con usuario, stats y widgets |
 | 5 | Hacer clic en botón de logout (🚪) | Redirige a `/auth/login` |
@@ -1363,54 +1377,116 @@ Abre el navegador en `http://localhost:4200`
 
 ```
 src/app/
-├── core/
-│   ├── core.module.ts                              ← Módulo singleton
+├── core/                                           ← Solo carpetas, SIN .module.ts
 │   ├── guards/
-│   │   └── auth.guard.ts                           ← Protege rutas
+│   │   └── auth.guard.ts                           ← Guard FUNCIONAL (función)
+│   ├── interceptors/                               ← (vacío, para próxima clase)
 │   ├── models/
-│   │   └── user.model.ts                           ← Interfaces
+│   │   └── user.model.ts                           ← Interfaces TypeScript
 │   └── services/
-│       └── auth.service.ts                         ← Lógica de autenticación
+│       └── auth.service.ts                         ← Servicio con Signals
 ├── modules/
-│   ├── auth/
-│   │   ├── auth.module.ts                          ← Módulo Auth
-│   │   ├── auth-routing.module.ts                  ← Rutas Auth
+│   ├── auth/                                       ← SIN auth.module.ts
 │   │   └── pages/login/
-│   │       ├── login.component.ts                  ← Lógica del login
-│   │       ├── login.component.html                ← Vista del login
-│   │       └── login.component.scss                ← Estilos del login
-│   └── dashboard/
-│       ├── dashboard.module.ts                     ← Módulo Dashboard
-│       ├── dashboard-routing.module.ts             ← Rutas Dashboard
+│   │       ├── login.ts                            ← Componente standalone
+│   │       ├── login.html                          ← Template con @if/@for
+│   │       └── login.scss                          ← Estilos
+│   └── dashboard/                                  ← SIN dashboard.module.ts
 │       ├── components/
-│       │   ├── sidebar/                            ← Menú lateral
-│       │   ├── header/                             ← Barra superior
-│       │   └── stats-card/                         ← Tarjeta de estadísticas
+│       │   ├── sidebar/                            ← Componente standalone
+│       │   ├── header/                             ← Componente standalone
+│       │   └── stats-card/                         ← Componente standalone con input()
 │       └── pages/main/
-│           ├── main.component.ts                   ← Lógica principal
-│           ├── main.component.html                 ← Vista principal
-│           └── main.component.scss                 ← Estilos del dashboard
-├── app.module.ts                                   ← Importa CoreModule
-├── app-routing.module.ts                           ← Lazy loading + Guard
-└── app.component.html                              ← Solo <router-outlet>
+│           ├── main.ts                             ← Importa componentes directamente
+│           ├── main.html                           ← Template con @for y self-closing tags
+│           └── main.scss                           ← Estilos del dashboard
+├── shared/
+│   └── components/                                 ← (vacío, para componentes comunes)
+├── app.ts                                          ← Componente raíz standalone
+├── app.html                                        ← Solo <router-outlet />
+├── app.scss                                        ← Estilos del componente raíz
+├── app.config.ts                                   ← ⭐ Reemplaza a AppModule
+├── app.config.server.ts                            ← Config SSR
+├── app.routes.ts                                   ← ⭐ Rutas con loadComponent
+└── app.routes.server.ts                            ← Rutas SSR
 ```
 
 ---
 
-## 🎯 Conceptos Clave Repasados en Clase
+## 🎯 Conceptos Clave — Angular 21 Standalone
 
-| Concepto | Dónde se aplicó |
-|----------|----------------|
-| **Arquitectura Core** | `CoreModule` con singleton pattern |
-| **Lazy Loading** | `loadChildren` en `app-routing.module.ts` |
-| **Guards** | `AuthGuard` protege `/dashboard` |
-| **Reactive Forms** | `FormBuilder` + `Validators` en Login |
-| **BehaviorSubject** | Estado del usuario en `AuthService` |
-| **@Input / @Output** | `StatsCardComponent`, `SidebarComponent` |
-| **Servicios Inyectables** | `AuthService` con `providedIn: 'root'` |
-| **localStorage** | Persistencia del token JWT |
+| Concepto | Dónde se aplicó | Diferencia con NgModule |
+|----------|-----------------|------------------------|
+| **Standalone Components** | Todos los componentes | No necesitan `declarations` en un módulo |
+| **`app.config.ts`** | Configuración global | Reemplaza a `AppModule` |
+| **`loadComponent`** | `app.routes.ts` | Reemplaza `loadChildren` + módulos |
+| **Guard Funcional** | `authGuard` como función | Reemplaza clase `AuthGuard` |
+| **Signals** | `AuthService`, `Login` | Reemplaza `BehaviorSubject` y propiedades |
+| **`input()` / `output()`** | `StatsCard`, `Sidebar` | Reemplaza `@Input()` / `@Output()` |
+| **`inject()`** | `Header`, `authGuard` | Alternativa a inyección por constructor |
+| **`@if` / `@for`** | Todos los templates | Reemplaza `*ngIf` / `*ngFor` |
+| **Reactive Forms** | Login con `FormBuilder` | Se importa en `@Component`, no en módulo |
+| **Self-closing tags** | `<app-sidebar />` | Sintaxis más limpia |
+
+---
+
+## 🔄 Migración Rápida — Cheat Sheet
+
+Si vienes de un proyecto con NgModule, aquí tienes las equivalencias:
+
+```typescript
+// ❌ ANTES (NgModule)
+@NgModule({
+  declarations: [LoginComponent],
+  imports: [CommonModule, ReactiveFormsModule],
+})
+export class AuthModule { }
+
+// ✅ AHORA (Standalone)
+@Component({
+  selector: 'app-login',
+  imports: [ReactiveFormsModule],  // ← Directo en el componente
+  templateUrl: './login.html',
+})
+export class Login { }
+```
+
+```typescript
+// ❌ ANTES (Guard con clase)
+@Injectable({ providedIn: 'root' })
+export class AuthGuard implements CanActivate {
+  constructor(private authService: AuthService) {}
+  canActivate(): boolean { ... }
+}
+
+// ✅ AHORA (Guard funcional)
+export const authGuard: CanActivateFn = () => {
+  const authService = inject(AuthService);
+  return authService.isAuthenticated();
+};
+```
+
+```typescript
+// ❌ ANTES (BehaviorSubject)
+private currentUser$ = new BehaviorSubject<User | null>(null);
+// Template: {{ currentUser$ | async }}
+
+// ✅ AHORA (Signal)
+private currentUser = signal<User | null>(null);
+// Template: {{ currentUser() }}
+```
+
+```html
+<!-- ❌ ANTES (*ngIf / *ngFor) -->
+<div *ngIf="isLoading">Cargando...</div>
+<div *ngFor="let item of items">{{ item }}</div>
+
+<!-- ✅ AHORA (@if / @for) -->
+@if (isLoading()) { <div>Cargando...</div> }
+@for (item of items; track item) { <div>{{ item }}</div> }
+```
 
 ---
 
 > [!TIP]
-> **Para la próxima clase:** Conectar el `AuthService` con un backend real usando `HttpClient` y crear un `TokenInterceptor` en `core/interceptors/` para enviar el JWT en cada request automáticamente.
+> **Para la próxima clase:** Conectar el `AuthService` con un backend real usando `provideHttpClient()` en `app.config.ts` y crear un **interceptor funcional** con `withInterceptors()` para enviar el JWT en cada request automáticamente.
