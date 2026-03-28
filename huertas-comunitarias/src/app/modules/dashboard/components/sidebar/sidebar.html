@@ -1,0 +1,19 @@
+<aside class="w-56 h-screen bg-white border-r border-gray-200 fixed left-0 top-0 flex flex-col">
+  <div class="flex items-center gap-2 px-4 py-4 bg-green-600 text-white">
+    <span class="text-xl">🌱</span>
+    <span class="font-bold text-sm">Huertas Comunitarias</span>
+  </div>
+
+  <nav class="py-3 flex-1">
+    @for (item of menuItems; track item.route) {
+      <a (click)="selectItem(item.route)"
+        class="flex items-center gap-3 px-5 py-2.5 text-sm cursor-pointer transition-all"
+        [class]="activeItem === item.route
+          ? 'bg-green-50 text-green-800 font-semibold border-l-3 border-green-600'
+          : 'text-gray-600 hover:bg-green-50 hover:text-green-700'">
+        <span>{{ item.icon }}</span>
+        <span>{{ item.label }}</span>
+      </a>
+    }
+  </nav>
+</aside>

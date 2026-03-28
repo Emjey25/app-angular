@@ -1,0 +1,70 @@
+<div class="flex min-h-screen bg-gray-100">
+  <app-sidebar />
+
+  <div class="flex-1 ml-56 flex flex-col">
+    <app-header />
+
+    <main class="p-6 flex-1">
+      <!-- Stats -->
+      <h3 class="text-base font-bold text-gray-700 mb-3">Resumen Mensual</h3>
+      <div class="grid grid-cols-3 gap-4 mb-6">
+        @for (stat of stats; track stat.title) {
+          <app-stats-card [title]="stat.title" [value]="stat.value" [icon]="stat.icon" />
+        }
+      </div>
+
+      <!-- Widgets -->
+      <div class="grid grid-cols-2 gap-6">
+
+        <!-- Tareas -->
+        <div class="bg-white rounded-xl p-5 shadow-sm">
+          <h3 class="font-bold text-gray-700 mb-4">Tareas Prioritarias</h3>
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="border-b-2 border-gray-200 text-left text-gray-500">
+                <th class="pb-2">Tarea</th>
+                <th class="pb-2">Asignado</th>
+                <th class="pb-2">Estado</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (t of tareas; track t.tarea) {
+                <tr class="border-b border-gray-100">
+                  <td class="py-2">{{ t.tarea }}</td>
+                  <td class="py-2">{{ t.asignado }}</td>
+                  <td class="py-2">
+                    <span class="px-3 py-1 rounded-full text-xs font-semibold"
+                      [class]="t.estado === 'Pendiente'
+                        ? 'bg-orange-100 text-orange-700'
+                        : 'bg-blue-100 text-blue-700'">
+                      {{ t.estado }}
+                    </span>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Cultivos -->
+        <div class="bg-white rounded-xl p-5 shadow-sm">
+          <h3 class="font-bold text-gray-700 mb-4">Estado de Cultivos</h3>
+          <div class="flex flex-col gap-3">
+            @for (c of cultivos; track c.nombre) {
+              <div class="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                <div class="flex flex-col">
+                  <strong class="text-sm">{{ c.nombre }}</strong>
+                  <small class="text-xs text-gray-500">{{ c.estado }}</small>
+                </div>
+                <span class="px-3 py-1 rounded-full text-xs font-semibold text-white" [class]="c.color">
+                  {{ c.estado }}
+                </span>
+              </div>
+            }
+          </div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+</div>
